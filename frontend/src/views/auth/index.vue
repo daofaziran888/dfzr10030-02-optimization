@@ -48,6 +48,22 @@
             >
               {{ action }}
             </button>
+            <button
+              class="link"
+              type="button"
+              :data-testid="`coverage-check-${row.id}`"
+              @click="runCoverageCheck(row)"
+            >
+              快照核对
+            </button>
+            <button
+              class="link"
+              type="button"
+              :data-testid="`renew-coverage-${row.id}`"
+              @click="runCoverageRenew(row)"
+            >
+              责任续期
+            </button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -72,8 +88,33 @@
       </form>
     </div>
 
+    <div v-if="checkResult" class="modal-backdrop" data-testid="coverage-check-modal">
+      <div class="modal">
+        <h3>责任覆盖快照核对状态</h3>
+        <dl class="dag-detail">
+          <dt>核对状态</dt>
+          <dd data-testid="check-result-status">{{ checkResult.核对状态 }}</dd>
+          <dt>凭证编号</dt>
+          <dd>{{ checkResult.凭证编号 ?? '—' }}</dd>
+          <dt>数据源编号</dt>
+          <dd>{{ checkResult.数据源编号 ?? '—' }}</dd>
+          <dt>快照编号</dt>
+          <dd>{{ checkResult.快照编号 ?? '—' }}</dd>
+          <dt>快照版本</dt>
+          <dd>{{ checkResult.快照版本 ?? '—' }}</dd>
+          <dt>快照更新时间</dt>
+          <dd>{{ checkResult.快照更新时间 ?? '—' }}</dd>
+          <dt>说明</dt>
+          <dd>{{ checkResult.message ?? '—' }}</dd>
+        </dl>
+        <div class="page-actions">
+          <button class="btn primary" type="button" data-testid="close-check" @click="checkResult = null">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <footer class="page-foot">
-      <span>共 {{ total }} 条凭证管理记录</span>
+      <span>共 {{ total }} 条凭证管理记录 · 当前团队 {{ store.team }} · 角色 {{ store.role }}</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -83,9 +124,22 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
+import { useSessionStore } from '@/stores/session'
 
 type Row = Record<string, string | number | null>
+type CoverageCheckResult = {
+  ok: boolean
+  message: string
+  核对状态: string
+  凭证编号?: string
+  数据源编号?: string
+  快照编号?: string
+  快照版本?: number
+  快照更新时间?: string
+  可续期集合?: string[]
+}
 
+const store = useSessionStore()
 const ENDPOINT = '/api/auth'
 const columns = ["凭证编号", "凭证类型", "关联数据源", "凭证内容", "有效期至", "创建时间", "最后使用", "凭证状态"]
 const actions = ["续期凭证", "吊销凭证"]
@@ -100,11 +154,16 @@ const filterFields = columns.slice(0, 3)
 const showCreate = ref(false)
 const creating = ref(false)
 const createValues = ref<Record<string, string>>({})
+const checkResult = ref<CoverageCheckResult | null>(null)
 const stats = computed(() => [
   { label: metricNames[0], value: total.value },
   { label: metricNames[1], value: rows.value.filter((row) => row.status === statuses[1]).length },
   { label: metricNames[2], value: rows.value.filter((row) => row.status === statuses[statuses.length - 1]).length },
 ])
+
+function contextQuery(): string {
+  return new URLSearchParams({ team: store.team, role: store.role }).toString()
+}
 
 function resetFilters() {
   filters.value = {}
@@ -181,6 +240,35 @@ async function reload() {
     total.value = payload.total ?? rows.value.length
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '凭证管理列表读取失败'
+  }
+}
+
+async function runCoverageCheck(row: Row) {
+  errorMessage.value = ''
+  try {
+    const response = await request(`${ENDPOINT}/${row.id}/coverage-check?${contextQuery()}`)
+    checkResult.value = await response.json()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '责任覆盖核对失败'
+  }
+}
+
+async function runCoverageRenew(row: Row) {
+  errorMessage.value = ''
+  try {
+    const response = await request(`${ENDPOINT}/${row.id}/renew?${contextQuery()}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+    const payload = await response.json()
+    if (!response.ok || !payload.ok) {
+      // 越出归属：后端只写拒绝记录，原凭证不改动；把拒绝原因直接展示给值班团队。
+      errorMessage.value = payload.message || '责任续期被拒绝'
+      return
+    }
+    await reload()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '责任续期请求失败'
   }
 }
 

@@ -14,6 +14,7 @@ const Schedule = () => import('@/views/schedule/index.vue')
 const Monitor = () => import('@/views/monitor/index.vue')
 const LogViewer = () => import('@/views/log_viewer/index.vue')
 const Auth = () => import('@/views/auth/index.vue')
+const Coverage = () => import('@/views/coverage/index.vue')
 const Transform = () => import('@/views/transform/index.vue')
 const Flow = () => import('@/views/flow/index.vue')
 const Lineage = () => import('@/views/lineage/index.vue')
@@ -36,6 +37,7 @@ const router = createRouter({
     { path: '/monitor', name: 'monitor', component: Monitor },
     { path: '/log_viewer', name: 'log_viewer', component: LogViewer },
     { path: '/auth', name: 'auth', component: Auth },
+    { path: '/coverage', name: 'coverage', component: Coverage },
     { path: '/transform', name: 'transform', component: Transform },
     { path: '/flow', name: 'flow', component: Flow },
     { path: '/lineage', name: 'lineage', component: Lineage },
